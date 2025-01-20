@@ -1,0 +1,20 @@
+{
+    "VACCINATION_TABLE": {   
+        "Customer_Name": "TEXT(255) NOT NULL",
+        "Customer_Id": "TEXT(18) NOT NULL",
+        "Open_Date": "DATE NOT NULL",
+        "Last_Consulted_Date": "DATE",
+        "Vaccination_ID": "TEXT(5)",
+        "Dr_Name": "TEXT(255)",
+        "State": "TEXT(5)",
+        "Country": "TEXT(5)",
+        "DOB": "DATE",
+        "Is_Active": "BOOLEAN",
+        "Age": "Number(3,0)",
+        "Days_Since_Consultation": "Number(20,0)",
+        "Last_Updated_Timestamp": "TIMESTAMP_NTZ DEFAULT CURRENT_TIMESTAMP()",
+        "File_Source": "TEXT(450) NOT NULL",
+        "FILE_ROW_NUMBER": "Number(15,0) NOT NULL",
+        "ETL_Batch_ID": "Number(15,0) NOT NULL"
+    }
+}

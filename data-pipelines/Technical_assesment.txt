@@ -1,0 +1,21 @@
+Q.No 1 Create table queries.
+Ans    I will create a table_schema.json for staging as well as master table & write an python function which takes 
+       the input as JSOn file & create the DDL statement , In case of new country it will be beneficial as we can write
+       conditional statement to Create the Table & Load the data
+
+Q.No. 2 Create the above tables with additional derived columns: age and days since last consulted >30
+Ans     I will create the View in Snowflake as both the derived columns will be keep on changing so view will 
+        be an Optimal Solution.
+
+Q.No 3 Create Necessary Validation
+Ans    Validations 
+        1. Check for Country where its Null & Load that Data in error_data tables
+        2. Error Handling of Files in case of any error (Like create a Log Table )
+        3. Slack / Teams / Email Integration in case of real time notification
+        4. In case of any new country take the input from table_schema.json & Create New table & Load the data
+        5. After Loding data in Staging Table & (Master Table + Error Table ) Insert rows should be Matched
+        6. Insert File_Name , ETL_PIPE_ID in the tables for tracking
+        7. We might need to Transform Date data Type as in Intermediate tables it seems like integer
+           so we need to transform & in Load error data in err table with File name , File row number & ETL_PIPE_ID
+        8. In case of Updates/ Deletes we need to use Merge Append data in Snowflake & also need to write validation steps
+        

@@ -1,0 +1,25 @@
+{"prod" : 
+                {
+                    "table_schema"     : "table_schema.json",
+                    "stage"            : "@AWS_PRD" ,
+                    "temp_schema"      : "STG." ,
+                    "target_database"  : "PRD." ,
+                    "history_table"    : "S3_FILES",
+                    "incremental_load" : true ,
+                    "Warehouse"        : "TRANSFORM_WH" ,
+                    "async"            : true ,
+                    "pipeline_summary" : "PIPELINE_SUMMARY"
+                },
+"dev" : 
+                {
+                    "table_schema"     : "table_schema.json",
+                    "stage"            : "@AWS_DEV" ,
+                    "temp_schema"      : "STG." ,
+                    "target_database"  : "PRD." ,
+                    "history_table"    : "S3_FILES",
+                    "incremental_load" : true ,
+                    "Warehouse"        : "TRANSFORM_WH" ,
+                    "async"            : true ,
+                    "pipeline_summary" : "PIPELINE_SUMMARY"
+                }
+}
