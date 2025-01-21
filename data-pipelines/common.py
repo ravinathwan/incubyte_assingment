@@ -66,3 +66,130 @@ class s3_client:
         buffer = io.BytesIO(body_content)
         return buffer
 
+class SnowflakeClient:
+    """
+    A class to interact with Snowflake.
+
+    Attributes:
+        user (str): Snowflake User ID
+        password (str) : Snowflake Password
+        account (str) : Snowflake account Number
+        warehouse (str) : Virtual Warehouse e.g "TRANSFORM_WH"
+
+    """
+
+    def __init__(self, user, password, account, warehouse  ):
+        self.user = user
+        self.password = password
+        self.account = account
+        self.warehouse = warehouse
+        self.session = None
+
+    def create_session(self):
+        connection_parameters = {
+            "user": self.user,
+            "password": self.password,
+            "account": self.account,
+            "warehouse": self.warehouse,
+        }
+        self.session = Session.builder.configs(connection_parameters).create()
+        return self.session
+
+    def __enter__(self):
+        """
+        This method is called when entering a context manager with the `with` statement.
+        It creates a session and begins a transaction.
+        Example
+        With Conn:
+            conn.execute
+        
+        """
+        self.create_session()
+        self.session.sql("begin;").collect()
+        return self.session
+    
+    def __exit__(self, exc_type, exc_value, traceback):
+
+        """
+        This method is called when exiting a context manager with the `with` statement.
+        It either commits or rolls back a transaction based on the presence of an exception.
+        """
+
+        if exc_type:
+            self.session.sql("rollback;").collect()
+        else:
+            self.session.sql("commit;").collect()
+            
+        self.session.close()
+        return self
+
+    def execute_query(self, query: str , database: str  , schema: str) -> list:
+        """
+   Function to Execute Query in Snowflake. (DML - Insert/update/Delete/call Stored Procedure Statement )
+
+    Attributes:
+        query (str): The SQL query to be executed, e.g., any DML statement.
+        database : Snowflake Database name where query will execute
+        schema : schema within the specified database
+    """
+        
+        try:
+            self.session.sql(f"USE {database}.{schema}").collect()
+            
+            return self.session.sql(query).collect()
+        except Exception as e:
+            print(f"Error executing query: {e}")
+            raise
+           
+    def write_to_snowflake(self, dataframe: str, table: str, database: str, schema: str ,chunk = 100000):
+        """
+   Function to Write DataFrame into Snowflake Tables.
+
+    Attributes:
+        dataframe (str): Pandas Dataframe which we need to insert in Snowflake Table
+        table (str): Snowflake Table where Dataframe will be Written
+        database (str) : Snowflake Database name where Table Exists
+        schema (str): schema within the specified database
+        chunk : By Default 100,000  chunks of rows will be inserted into Snowflake
+    """
+        try:
+            self.session.write_pandas(dataframe, table_name=table,
+                                    database=database, schema=schema ,chunk_size = chunk , index=False)
+        except Exception as e:
+            print(f"Error writing DataFrame to Snowflake: {e}")
+
+    def table_schema(self,table_list: list, database: str ,schema: str) -> dict:
+        """
+   Function to Fetch the Snowflake Tables Columns & Data Types.
+
+    Attributes:
+        table_list (list) :- ['employees','timeoff'] List of Input Tables for which we need to fetch the Column name & Data Types
+        database (str):- Snowflake database name where table exists
+        schema (str) :- Snowflake schema where table exists 
+
+    Output:
+            dictonary with key as table name & value as column name & data type
+            Useful for creation of Temp Tables        
+    """
+
+
+        query_template = """ SELECT COLUMN_NAME 
+                                , Case when  CHARACTER_MAXIMUM_LENGTH is null then  DATA_TYPE
+                                else CONCAT(DATA_TYPE ,'(', CHARACTER_MAXIMUM_LENGTH  , ')') end as DATA_TYPE 
+                            FROM {database}.INFORMATION_SCHEMA.COLUMNS
+                                WHERE TABLE_NAME = '{table_name}' and TABLE_SCHEMA = '{schema}' ; """
+        
+        result_dict = {}
+
+        for table_name in table_list:
+
+            try:
+
+                raw_data = self.execute_query(query = query_template.format( table_name=table_name ,database=database, schema = schema) ,database=database, schema=schema)
+            
+                result_dict[table_name] = {row.COLUMN_NAME: row.DATA_TYPE for row in raw_data}
+            
+            except Exception as e:
+                print(f"Error executing query: {e}")
+
+        return result_dict
