@@ -193,3 +193,134 @@ class SnowflakeClient:
                 print(f"Error executing query: {e}")
 
         return result_dict
+    def temptable_statement(self,tables: dict) -> list:
+        """ Function to create Temporary Table Statement/query which will be executed in snowflake for Temporary Table Creation
+
+        Attributes:
+            table (dict) :- Input the Dictionary which is output of table_schema function
+        Output:
+            list :- create Temporary Table Statement/query       
+    """
+
+        create_temp_tables_sql = {}
+
+        for table_name, columns_dict in tables.items():
+            # Generate CREATE TEMPORARY TABLE statement
+            create_temp_table_sql = f"CREATE or replace TEMPORARY TABLE TEMP_{table_name} ("
+            create_temp_table_sql += ", ".join([f"{column} {data_type}" for column, data_type in columns_dict.items()])
+            create_temp_table_sql += ");"
+            #create_temp_tables_sql.append(create_temp_table_sql)
+
+            create_temp_tables_sql[table_name] = create_temp_table_sql
+
+
+        return create_temp_tables_sql
+    
+    
+    def merge_statement(self,source_table: str , target_table: str , columns: list , on_columns: list  ) -> str:
+        """
+        Function to create merge statement to merge Temporary table to Master Table in Snowflake with Condition
+        Attributes:
+
+        source_table (str):- Snowflake Source Table name (Temporary Table Name)
+        target_table (str) :- Snowflake Target Table Name (Master Table)
+        columns (list):- List of columns which we need to Insert (output of table_schema dict values)
+        on_columns (list) :- Primary Key / columns of source & master Table on which Delete  
+
+
+        """
+
+        update_columns = [f"t.{col} = s.{col}" for col in columns if col not in on_columns]
+        reference_columns = [f"t.{col} = s.{col}" for col in columns if col in on_columns]
+
+        merge_statement = f"""
+                        MERGE INTO {target_table} as t 
+                            USING {source_table} as s
+                                ON {' and '.join(reference_columns)}
+                        WHEN MATCHED THEN 
+                                DELETE ;
+                        Insert INTO {target_table} ({','.join(columns)})
+                        Select {','.join(columns)} from {source_table} 
+                        """
+        
+        #print(merge_statement)
+        
+        return merge_statement
+    
+def sort_files(files : list)-> list:
+    #unprocessed_files(s3 = s3 , snowflake = conn , s3_path = 'data-lake/cyara-sit/VoiceTestResult/'
+    #                                   , Source = 'CYARA_SIT' , Table = 'VOICETESTRESULT')
+    """
+    Sort the Files       
+    """
+
+    pattern = r'(\d+_\d+)\.(parquet|jsonl)'
+
+    files_to_transform = []
+
+    for file in files:
+
+        matched_pattern_data = re.search(pattern, file.get("Key"))
+        match_data = list(matched_pattern_data.groups())[0].split("_")
+
+        file['unix_timestamp'] = int(match_data[0])
+        file['index'] = int(match_data[1])
+                
+        files_to_transform.append(file)
+
+    return sorted(files_to_transform, key=lambda item: (item['unix_timestamp'], item['index']))
+    
+def unprocessed_files(s3,snowflake , s3_path :str  , database :str , schema :str , table :str)-> list:
+    #unprocessed_files(s3 = s3 , snowflake = conn , s3_path = 'data-lake/cyara-sit/VoiceTestResult/'
+    #                                   , Source = 'CYARA_SIT' , Table = 'VOICETESTRESULT')
+    """
+    Function used to get the List of UnProcessed Files 
+    It Queries the Snowflake & get the Max UnixTimestamp & Index of File & will use that to filter from AWS S3 Bucket Files
+
+    Attributes:
+        s3 :- s3 Connection 
+        Snowflake :- Snowflake Connection
+        s3_path (str) :- AWS S3 Bucket File path
+        databse :- Snowflake Database where S3_Files Table Exists
+        schema :- Snowflake Schema where S3_Files Table Exists
+        table :- Snowflake Query Where Condition for table 
+
+    Output :-
+            List of Unprocessed Files
+        
+    """
+
+    query= """
+                    SELECT UNIX_TIMESTAMP, FILE_INDEX
+                    FROM {1}.{2}.S3_FILES
+                    WHERE  "TABLE" = '{0}' and IS_PROCESSED = TRUE
+                    order by UNIX_TIMESTAMP Desc , FILE_INDEX desc  limit 1;
+                """.format( table , database , schema)
+    
+    
+    with snowflake:
+        existing_files = snowflake.execute_query(query = query, database = database , schema= schema)
+
+    pattern = r'(\d+_\d+)\.(parquet|jsonl)'
+    
+    files =  s3.list_files(folder_prefix = s3_path)
+
+    files_to_transform = []
+
+    for file in files:
+
+        matched_pattern_data = re.search(pattern, file.get("Key"))
+        match_data = list(matched_pattern_data.groups())[0].split("_")
+
+        file['unix_timestamp'] = int(match_data[0])
+        file['index'] = int(match_data[1])
+
+        if existing_files: # If CYARA.S3_FILES.FILES Provides empty list then all files need to process
+
+            if file['unix_timestamp'] >= existing_files[0][0] and (file['unix_timestamp'] != existing_files[0][0] or file['index'] > existing_files[0][1]):
+                files_to_transform.append(file)
+                
+        else:
+            files_to_transform.append(file)
+
+    return sorted(files_to_transform, key=lambda item: (item['unix_timestamp'], item['index']))
